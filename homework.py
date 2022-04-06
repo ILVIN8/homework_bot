@@ -18,7 +18,6 @@ logging.basicConfig(
     format="%(asctime)s, %(levelname)s, %(message)s",
 )
 
-
 RETRY_TIME = 600
 ENDPOINT = "https://practicum.yandex.ru/api/user_api/homework_statuses/"
 HEADERS = {"Authorization": f"OAuth {PRACTICUM_TOKEN}"}
@@ -40,17 +39,34 @@ def get_api_answer(current_timestamp):
     """Получение списка домашних работ."""
     timestamp = current_timestamp or int(time.time())
     params = {"from_date": timestamp}
-    request = requests.get(ENDPOINT, headers=HEADERS, params=params)
-    response = request.json()
-    return response
+    try:
+        response = requests.get(ENDPOINT, headers=HEADERS, params=params)
+        if response.status_code != 200:
+            logging.error("API возвращает код, отличный от 200")
+            raise
+        return response.json()
+    except requests.exceptions.RequestException:
+        logging.error("API возвращает код, отличный от 200")
 
 
 def check_response(response):
     """Проверка корректности ответа от Практикума."""
+    if type(response["homeworks"]) is not list:
+        raise TypeError(
+            'Под ключом "homeworks" домашки приходят не в виде списка'
+        )
+    if not isinstance(response, dict):
+        logging.error("Ответ API не содержит словаря")
+        raise TypeError("Ответ API не содержит словаря")
     if "homeworks" in response:
-        return response["homeworks"]
+        try:
+            homeworks = response["homeworks"]
+            return homeworks
+        except KeyError as ex:
+            raise Exception(ex)
     else:
-        False
+        logging.error('API не содержит ключа "homeworks"')
+        raise Exception('API не содержит ключа "homeworks"')
 
 
 def parse_status(homework) -> str:
@@ -63,15 +79,7 @@ def parse_status(homework) -> str:
 
 def check_tokens() -> bool:
     """Проверка переменных в локальном хранилище."""
-    if (
-        os.getenv(
-            "PRACTICUM_TOKEN" and "TELEGRAM_TOKEN" and "TELEGRAM_CHAT_ID"
-        )
-        is not None
-    ):
-        return True
-    else:
-        return False
+    return all((PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID))
 
 
 def main():
