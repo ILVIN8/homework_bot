@@ -1,9 +1,12 @@
+from http.client import OK
 import logging
 import os
 import time
 import telegram
 import requests
 from dotenv import load_dotenv
+from exceptions import TokenError, AnyError
+
 
 load_dotenv()
 
@@ -33,6 +36,7 @@ HOMEWORK_STATUSES = {
 def send_message(bot, message):
     """Отправка сообщения пользователю."""
     bot.send_message(TELEGRAM_CHAT_ID, message)
+    logging.info("Сообщение о статусе ДЗ отправлено")
 
 
 def get_api_answer(current_timestamp):
@@ -41,7 +45,7 @@ def get_api_answer(current_timestamp):
     params = {"from_date": timestamp}
     try:
         response = requests.get(ENDPOINT, headers=HEADERS, params=params)
-        if response.status_code != 200:
+        if response.status_code != OK:
             logging.error("API возвращает код, отличный от 200")
             raise
         return response.json()
@@ -63,10 +67,10 @@ def check_response(response):
             homeworks = response["homeworks"]
             return homeworks
         except KeyError as ex:
-            raise Exception(ex)
+            raise AnyError(ex)
     else:
         logging.error('API не содержит ключа "homeworks"')
-        raise Exception('API не содержит ключа "homeworks"')
+        raise AnyError('API не содержит ключа "homeworks"')
 
 
 def parse_status(homework) -> str:
@@ -88,7 +92,7 @@ def main():
         logging.critical(
             "Отсутствуют переменные окружения! Зовите программиста!!!"
         )
-        raise NameError("Отсутствуют переменные окружения")
+        raise TokenError("Отсутствуют переменные окружения")
 
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     current_timestamp = int(time.time() - 2629743)
@@ -100,7 +104,6 @@ def main():
                 homework = homeworks[0]
                 message = parse_status(homework)
                 send_message(bot, message)
-                logging.info("Сообщение о статусе ДЗ отправлено")
 
             current_timestamp = response.get("current_date")
             time.sleep(RETRY_TIME)
@@ -109,6 +112,8 @@ def main():
             message = f"Сбой в работе программы: {error}"
             logging.error(message)
             send_message(bot, message)
+
+        finally:
             time.sleep(RETRY_TIME)
 
 
